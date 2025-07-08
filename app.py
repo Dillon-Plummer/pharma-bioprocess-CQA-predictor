@@ -8,6 +8,10 @@ import seaborn as sns
 import os
 from pathlib import Path
 
+# Import the new data generation function
+from synthetic_data import generate_synthetic_data
+from feature_engineering import create_tabular_features_single
+
 # --- Page Configuration ---
 st.set_page_config(page_title="Bioprocess CQA Predictor", page_icon="🔬", layout="wide")
 
@@ -30,36 +34,22 @@ def load_all_models():
             models[model_name] = joblib.load(path)
     return models
 
-# --- Feature Engineering Function ---
-def create_tabular_features_single(df):
-    """Engineers features for a single batch."""
-    return pd.DataFrame({
-        'mean_temp': [df['temperature'].mean()], 'std_temp': [df['temperature'].std()],
-        'mean_ph': [df['ph'].mean()], 'std_ph': [df['ph'].std()],
-        'mean_do': [df['dissolved_oxygen'].mean()], 'std_do': [df['dissolved_oxygen'].std()]
-    })
-
 # --- Load Data ---
 @st.cache_data
 def load_demo_data():
-    """Loads the synthetic demo data from the data/ directory."""
-    data_path = Path(__file__).resolve().parent / 'data' / 'synthetic_cell_culture_data.csv'
-    if data_path.exists():
-        return pd.read_csv(data_path)
-    return None
+    """Generates and caches the synthetic demo data."""
+    return generate_synthetic_data()
 
 # --- Main App ---
 models = load_all_models()
 demo_df = load_demo_data()
 
 st.title("🔬 Bioprocess Critical Quality Attribute (CQA) Predictor")
-st.write("This application predicts the final protein titer of a cell culture batch based on its early-stage sensor data.")
+st.write("This application uses internally-generated synthetic data to predict the final protein titer of a cell culture batch.")
 
 # --- Main Logic ---
 if not models:
     st.error("Models not found. Please run the `train_models.py` script first to train and save the models.")
-elif demo_df is None:
-    st.error("Demo data not found. Please make sure `synthetic_cell_culture_data.csv` is in the `data` directory.")
 else:
     # --- UI ---
     st.sidebar.title("Select a Batch")

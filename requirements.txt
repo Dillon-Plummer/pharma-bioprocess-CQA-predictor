@@ -6,3 +6,4 @@ pyspc
 matplotlib
 streamlit
 tensorflow
+seaborn

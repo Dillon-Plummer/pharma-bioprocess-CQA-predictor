@@ -10,7 +10,6 @@ from pathlib import Path
 
 # Import the new data generation function
 from synthetic_data import generate_synthetic_data
-from feature_engineering import create_tabular_features_single
 
 # --- Page Configuration ---
 st.set_page_config(page_title="Bioprocess CQA Predictor", page_icon="🔬", layout="wide")

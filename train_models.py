@@ -9,12 +9,14 @@ from sklearn.metrics import mean_squared_error
 import os
 
 from synthetic_data import generate_synthetic_data
-from feature_engineering import create_gb_features
+from feature_engineering import create_tabular_features # <-- Use the updated function
 
-print("Generating synthetic data and engineering features...")
+print("Generating synthetic data...")
 df = generate_synthetic_data()
 
-features_tabular = create_gb_features(df)
+print("Engineering features for training...")
+# Process the full training dataset
+features_tabular = create_tabular_features(df, is_training=True)
 labels = df.groupby('batch_id')['titer'].last()
 data_tabular = features_tabular.join(labels)
 

@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import matplotlib.pyplot as plt
+import seaborn as sns
 import os
 from pathlib import Path
 
@@ -76,6 +77,13 @@ else:
                 st.subheader("Preview")
                 st.dataframe(batch_df.head())
 
+                st.subheader("Correlation Heatmap")
+                corr = batch_df.corr(numeric_only=True)
+                fig, ax = plt.subplots()
+                sns.heatmap(corr, annot=True, cmap="Blues", ax=ax)
+                ax.set_title("Correlation of Process Parameters")
+                st.pyplot(fig)
+
             with tab1:
                 st.header("Statistical Process Control (SPC) Chart")
                 st.write("This chart monitors the stability of the temperature process parameter.")
@@ -89,7 +97,7 @@ else:
 
                 # Plotting the chart
                 fig, ax = plt.subplots()
-                ax.plot(data.index, data, marker='o', linestyle='-', color='dodgerblue', label='Temperature')
+                sns.lineplot(x=data.index, y=data.values, marker='o', ax=ax, color='dodgerblue', label='Temperature')
                 ax.axhline(cl, color='green', linestyle='--', label='Center Line (CL)')
                 ax.axhline(ucl, color='red', linestyle='--', label='Control Limit (UCL)')
                 ax.axhline(lcl, color='red', linestyle='--', label='Control Limit (LCL)')
@@ -117,6 +125,13 @@ else:
                         columns=['Coefficient']
                     ).sort_values(by='Coefficient', ascending=False)
                     st.dataframe(coeffs)
+                    fig, ax = plt.subplots()
+                    sns.barplot(x=coeffs.index, y='Coefficient', data=coeffs, ax=ax, palette='crest')
+                    ax.set_title('Lasso Coefficients')
+                    ax.set_xlabel('Feature')
+                    ax.set_ylabel('Coefficient Value')
+                    ax.tick_params(axis='x', rotation=45)
+                    st.pyplot(fig)
                     st.caption("Features with a coefficient of 0 were excluded by the model.")
 
             with tab3:
@@ -124,12 +139,30 @@ else:
                 prediction = models['rf'].predict(features)[0]
                 st.metric(label="Predicted Titer", value=f"{prediction:.4f}")
                 st.info("Random Forest is a robust ensemble model that combines many decision trees to prevent overfitting.")
+                with st.expander("Feature Importances"):
+                    importances = pd.Series(models['rf'].feature_importances_, index=features.columns)
+                    fig, ax = plt.subplots()
+                    sns.barplot(x=importances.index, y=importances.values, ax=ax, palette='flare')
+                    ax.set_title('Random Forest Feature Importance')
+                    ax.set_xlabel('Feature')
+                    ax.set_ylabel('Importance')
+                    ax.tick_params(axis='x', rotation=45)
+                    st.pyplot(fig)
 
             with tab4:
                 st.header("XGBoost Prediction")
                 prediction = models['xgb'].predict(features)[0]
                 st.metric(label="Predicted Titer", value=f"{prediction:.4f}")
                 st.info("XGBoost is a highly optimized version of Gradient Boosting, often leading to high performance.")
+                with st.expander("Feature Importances"):
+                    importances = pd.Series(models['xgb'].feature_importances_, index=features.columns)
+                    fig, ax = plt.subplots()
+                    sns.barplot(x=importances.index, y=importances.values, ax=ax, palette='mako')
+                    ax.set_title('XGBoost Feature Importance')
+                    ax.set_xlabel('Feature')
+                    ax.set_ylabel('Importance')
+                    ax.tick_params(axis='x', rotation=45)
+                    st.pyplot(fig)
 
             with tab5:
                 st.header("Model Prediction Comparison")
@@ -147,6 +180,13 @@ else:
                     comparison_df.style.format({'Predicted Titer': '{:.4f}'}),
                     use_container_width=True,
                 )
+                fig, ax = plt.subplots()
+                sns.barplot(x='Model', y='Predicted Titer', data=comparison_df, ax=ax, palette='pastel')
+                ax.set_title('Predicted Titer by Model')
+                ax.set_xlabel('Model')
+                ax.set_ylabel('Predicted Titer')
+                ax.tick_params(axis='x', rotation=45)
+                st.pyplot(fig)
                 csv = comparison_df.to_csv(index=False).encode('utf-8')
                 st.download_button(
                     label="Download Predictions as CSV",

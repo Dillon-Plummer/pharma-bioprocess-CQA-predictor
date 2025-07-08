@@ -30,20 +30,27 @@ def load_all_models():
             models[model_name] = joblib.load(path)
     return models
 
-models = load_all_models()
-
 # --- Feature Engineering Function ---
 def create_tabular_features_single(df):
-    """Engineers features for a single uploaded batch."""
+    """Engineers features for a single batch."""
     return pd.DataFrame({
         'mean_temp': [df['temperature'].mean()], 'std_temp': [df['temperature'].std()],
         'mean_ph': [df['ph'].mean()], 'std_ph': [df['ph'].std()],
         'mean_do': [df['dissolved_oxygen'].mean()], 'std_do': [df['dissolved_oxygen'].std()]
     })
 
-# --- UI ---
-st.sidebar.title("Upload Batch Data")
-uploaded_file = st.sidebar.file_uploader("Upload a CSV file with sensor data.", type=["csv"])
+# --- Load Data ---
+@st.cache_data
+def load_demo_data():
+    """Loads the synthetic demo data from the data/ directory."""
+    data_path = Path(__file__).resolve().parent / 'data' / 'synthetic_cell_culture_data.csv'
+    if data_path.exists():
+        return pd.read_csv(data_path)
+    return None
+
+# --- Main App ---
+models = load_all_models()
+demo_df = load_demo_data()
 
 st.title("🔬 Bioprocess Critical Quality Attribute (CQA) Predictor")
 st.write("This application predicts the final protein titer of a cell culture batch based on its early-stage sensor data.")
@@ -51,149 +58,128 @@ st.write("This application predicts the final protein titer of a cell culture ba
 # --- Main Logic ---
 if not models:
     st.error("Models not found. Please run the `train_models.py` script first to train and save the models.")
-elif uploaded_file is None:
-    st.info("Please upload a file through the sidebar to begin analysis.")
+elif demo_df is None:
+    st.error("Demo data not found. Please make sure `synthetic_cell_culture_data.csv` is in the `data` directory.")
 else:
-    try:
-        batch_df = pd.read_csv(uploaded_file)
-        # Basic check for required columns
-        required_cols = ['temperature', 'ph', 'dissolved_oxygen']
-        if not all(col in batch_df.columns for col in required_cols):
-            st.error(f"The uploaded CSV must contain the columns: {', '.join(required_cols)}")
-        else:
-            # Create tabs
-            tab_summary, tab1, tab2, tab3, tab4, tab5 = st.tabs([
-                "📈 Data Summary",
-                "📊 SPC Results",
-                "⛓️ Lasso Regression",
-                "🌳 Random Forest",
-                "🚀 XGBoost",
-                "⚖️ Model Comparison",
-            ])
+    # --- UI ---
+    st.sidebar.title("Select a Batch")
+    batch_ids = demo_df['batch_id'].unique()
+    selected_batch_id = st.sidebar.selectbox("Select a Demo Batch to Analyze", sorted(batch_ids))
 
-            with tab_summary:
-                st.header("Data Summary")
-                st.dataframe(batch_df.describe())
-                st.subheader("Preview")
-                st.dataframe(batch_df.head())
+    # Filter data for the selected batch
+    batch_df = demo_df[demo_df['batch_id'] == selected_batch_id].copy()
 
-                st.subheader("Correlation Heatmap")
-                corr = batch_df.corr(numeric_only=True)
-                fig, ax = plt.subplots()
-                sns.heatmap(corr, annot=True, cmap="Blues", ax=ax)
-                ax.set_title("Correlation of Process Parameters")
-                st.pyplot(fig)
+    # Create tabs
+    tab_summary, tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📈 Data Summary",
+        "📊 SPC Results",
+        "⛓️ Lasso Regression",
+        "🌳 Random Forest",
+        "🚀 XGBoost",
+        "⚖️ Model Comparison",
+    ])
 
-            with tab1:
-                st.header("Statistical Process Control (SPC) Chart")
-                st.write("This chart monitors the stability of the temperature process parameter.")
+    with tab_summary:
+        st.header(f"Data Summary for: {selected_batch_id}")
+        st.dataframe(batch_df.describe())
+        st.subheader("Preview")
+        st.dataframe(batch_df.head())
 
-                # Manually calculate SPC limits using pandas
-                data = batch_df['temperature']
-                cl = data.mean()
-                std_dev = data.std()
-                ucl = cl + 3 * std_dev
-                lcl = cl - 3 * std_dev
+        st.subheader("Correlation Heatmap")
+        corr = batch_df[['temperature', 'ph', 'dissolved_oxygen']].corr()
+        fig, ax = plt.subplots()
+        sns.heatmap(corr, annot=True, cmap="Blues", ax=ax)
+        ax.set_title("Correlation of Process Parameters")
+        st.pyplot(fig)
 
-                # Plotting the chart
-                fig, ax = plt.subplots()
-                sns.lineplot(x=data.index, y=data.values, marker='o', ax=ax, color='dodgerblue', label='Temperature')
-                ax.axhline(cl, color='green', linestyle='--', label='Center Line (CL)')
-                ax.axhline(ucl, color='red', linestyle='--', label='Control Limit (UCL)')
-                ax.axhline(lcl, color='red', linestyle='--', label='Control Limit (LCL)')
-                ax.set_title("SPC Chart for Temperature", fontsize=16)
-                ax.set_xlabel("Data Point Index", fontsize=12)
-                ax.set_ylabel("Average Temperature", fontsize=12)
-                ax.legend()
-                ax.grid(True, which='both', linestyle='--', linewidth=0.5)
-                st.pyplot(fig)
+    with tab1:
+        st.header("Statistical Process Control (SPC) Chart")
+        st.write("This chart monitors the stability of the temperature process parameter for the selected batch.")
 
+        data = batch_df['temperature']
+        cl = data.mean()
+        std_dev = data.std()
+        ucl = cl + 3 * std_dev
+        lcl = cl - 3 * std_dev
 
+        fig, ax = plt.subplots()
+        sns.lineplot(x=data.index, y=data.values, marker='o', ax=ax, color='dodgerblue', label='Temperature')
+        ax.axhline(cl, color='green', linestyle='--', label='Center Line (CL)')
+        ax.axhline(ucl, color='red', linestyle='--', label='Control Limit (UCL)')
+        ax.axhline(lcl, color='red', linestyle='--', label='Control Limit (LCL)')
+        ax.set_title("SPC Chart for Temperature", fontsize=16)
+        ax.set_xlabel("Data Point Index", fontsize=12)
+        ax.set_ylabel("Temperature", fontsize=12)
+        ax.legend()
+        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+        st.pyplot(fig)
 
-            features = create_tabular_features_single(batch_df)
+    features = create_tabular_features_single(batch_df)
 
-            with tab2:
-                st.header("Lasso Regression Prediction")
-                prediction = models['lasso'].predict(features)[0]
-                st.metric(label="Predicted Titer", value=f"{prediction:.4f}")
-                st.info("Lasso Regression is a highly transparent linear model that automatically selects the most important process features.")
-                
-                with st.expander("View Model Coefficients"):
-                    coeffs = pd.DataFrame(
-                        models['lasso'].coef_,
-                        features.columns,
-                        columns=['Coefficient']
-                    ).sort_values(by='Coefficient', ascending=False)
-                    st.dataframe(coeffs)
-                    fig, ax = plt.subplots()
-                    sns.barplot(x=coeffs.index, y='Coefficient', data=coeffs, ax=ax, palette='crest')
-                    ax.set_title('Lasso Coefficients')
-                    ax.set_xlabel('Feature')
-                    ax.set_ylabel('Coefficient Value')
-                    ax.tick_params(axis='x', rotation=45)
-                    st.pyplot(fig)
-                    st.caption("Features with a coefficient of 0 were excluded by the model.")
+    with tab2:
+        st.header("Lasso Regression Prediction")
+        prediction = models['lasso'].predict(features)[0]
+        st.metric(label="Predicted Titer", value=f"{prediction:.4f}")
+        st.info("Lasso Regression is a highly transparent linear model that automatically selects the most important process features.")
+        
+        with st.expander("View Model Coefficients"):
+            coeffs = pd.DataFrame(
+                models['lasso'].coef_,
+                features.columns,
+                columns=['Coefficient']
+            ).sort_values(by='Coefficient', ascending=False)
+            st.dataframe(coeffs)
+            fig, ax = plt.subplots()
+            sns.barplot(x=coeffs.index, y='Coefficient', data=coeffs, ax=ax, palette='crest')
+            ax.set_title('Lasso Coefficients')
+            ax.tick_params(axis='x', rotation=45)
+            st.pyplot(fig)
+            st.caption("Features with a coefficient of 0 were excluded by the model.")
 
-            with tab3:
-                st.header("Random Forest Prediction")
-                prediction = models['rf'].predict(features)[0]
-                st.metric(label="Predicted Titer", value=f"{prediction:.4f}")
-                st.info("Random Forest is a robust ensemble model that combines many decision trees to prevent overfitting.")
-                with st.expander("Feature Importances"):
-                    importances = pd.Series(models['rf'].feature_importances_, index=features.columns)
-                    fig, ax = plt.subplots()
-                    sns.barplot(x=importances.index, y=importances.values, ax=ax, palette='flare')
-                    ax.set_title('Random Forest Feature Importance')
-                    ax.set_xlabel('Feature')
-                    ax.set_ylabel('Importance')
-                    ax.tick_params(axis='x', rotation=45)
-                    st.pyplot(fig)
+    with tab3:
+        st.header("Random Forest Prediction")
+        prediction = models['rf'].predict(features)[0]
+        st.metric(label="Predicted Titer", value=f"{prediction:.4f}")
+        st.info("Random Forest is a robust ensemble model that combines many decision trees to prevent overfitting.")
+        with st.expander("Feature Importances"):
+            importances = pd.Series(models['rf'].feature_importances_, index=features.columns).sort_values(ascending=False)
+            fig, ax = plt.subplots()
+            sns.barplot(x=importances.index, y=importances.values, ax=ax, palette='flare')
+            ax.set_title('Random Forest Feature Importance')
+            ax.tick_params(axis='x', rotation=45)
+            st.pyplot(fig)
 
-            with tab4:
-                st.header("XGBoost Prediction")
-                prediction = models['xgb'].predict(features)[0]
-                st.metric(label="Predicted Titer", value=f"{prediction:.4f}")
-                st.info("XGBoost is a highly optimized version of Gradient Boosting, often leading to high performance.")
-                with st.expander("Feature Importances"):
-                    importances = pd.Series(models['xgb'].feature_importances_, index=features.columns)
-                    fig, ax = plt.subplots()
-                    sns.barplot(x=importances.index, y=importances.values, ax=ax, palette='mako')
-                    ax.set_title('XGBoost Feature Importance')
-                    ax.set_xlabel('Feature')
-                    ax.set_ylabel('Importance')
-                    ax.tick_params(axis='x', rotation=45)
-                    st.pyplot(fig)
+    with tab4:
+        st.header("XGBoost Prediction")
+        prediction = models['xgb'].predict(features)[0]
+        st.metric(label="Predicted Titer", value=f"{prediction:.4f}")
+        st.info("XGBoost is a highly optimized version of Gradient Boosting, often leading to high performance.")
+        with st.expander("Feature Importances"):
+            importances = pd.Series(models['xgb'].feature_importances_, index=features.columns).sort_values(ascending=False)
+            fig, ax = plt.subplots()
+            sns.barplot(x=importances.index, y=importances.values, ax=ax, palette='mako')
+            ax.set_title('XGBoost Feature Importance')
+            ax.tick_params(axis='x', rotation=45)
+            st.pyplot(fig)
 
-            with tab5:
-                st.header("Model Prediction Comparison")
-                all_predictions = {
-                    'Model': ['Lasso Regression', 'Random Forest', 'XGBoost', 'Gradient Boosting'],
-                    'Predicted Titer': [
-                        models['lasso'].predict(features)[0],
-                        models['rf'].predict(features)[0],
-                        models['xgb'].predict(features)[0],
-                        models['gb'].predict(features)[0]
-                    ]
-                }
-                comparison_df = pd.DataFrame(all_predictions)
-                st.dataframe(
-                    comparison_df.style.format({'Predicted Titer': '{:.4f}'}),
-                    use_container_width=True,
-                )
-                fig, ax = plt.subplots()
-                sns.barplot(x='Model', y='Predicted Titer', data=comparison_df, ax=ax, palette='pastel')
-                ax.set_title('Predicted Titer by Model')
-                ax.set_xlabel('Model')
-                ax.set_ylabel('Predicted Titer')
-                ax.tick_params(axis='x', rotation=45)
-                st.pyplot(fig)
-                csv = comparison_df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="Download Predictions as CSV",
-                    data=csv,
-                    file_name="predictions.csv",
-                    mime="text/csv",
-                )
-
-    except Exception as e:
-        st.error(f"An error occurred while processing the file: {e}")
+    with tab5:
+        st.header("Model Prediction Comparison")
+        all_predictions = {
+            'Model': ['Lasso Regression', 'Random Forest', 'XGBoost', 'Gradient Boosting'],
+            'Predicted Titer': [
+                models['lasso'].predict(features)[0],
+                models['rf'].predict(features)[0],
+                models['xgb'].predict(features)[0],
+                models['gb'].predict(features)[0]
+            ]
+        }
+        comparison_df = pd.DataFrame(all_predictions)
+        st.dataframe(
+            comparison_df.style.format({'Predicted Titer': '{:.4f}'}),
+            use_container_width=True,
+        )
+        fig, ax = plt.subplots()
+        sns.barplot(x='Model', y='Predicted Titer', data=comparison_df, ax=ax, palette='pastel')
+        ax.set_title('Predicted Titer by Model')
+        ax.tick_params(axis='x', rotation=45)
+        st.pyplot(fig)

@@ -61,7 +61,20 @@ else:
             st.error(f"The uploaded CSV must contain the columns: {', '.join(required_cols)}")
         else:
             # Create tabs
-            tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 SPC Results", "⛓️ Lasso Regression", "🌳 Random Forest", "🚀 XGBoost", "⚖️ Model Comparison"])
+            tab_summary, tab1, tab2, tab3, tab4, tab5 = st.tabs([
+                "📈 Data Summary",
+                "📊 SPC Results",
+                "⛓️ Lasso Regression",
+                "🌳 Random Forest",
+                "🚀 XGBoost",
+                "⚖️ Model Comparison",
+            ])
+
+            with tab_summary:
+                st.header("Data Summary")
+                st.dataframe(batch_df.describe())
+                st.subheader("Preview")
+                st.dataframe(batch_df.head())
 
             with tab1:
                 st.header("Statistical Process Control (SPC) Chart")
@@ -130,7 +143,17 @@ else:
                     ]
                 }
                 comparison_df = pd.DataFrame(all_predictions)
-                st.dataframe(comparison_df.style.format({'Predicted Titer': '{:.4f}'}), use_container_width=True)
+                st.dataframe(
+                    comparison_df.style.format({'Predicted Titer': '{:.4f}'}),
+                    use_container_width=True,
+                )
+                csv = comparison_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download Predictions as CSV",
+                    data=csv,
+                    file_name="predictions.csv",
+                    mime="text/csv",
+                )
 
     except Exception as e:
         st.error(f"An error occurred while processing the file: {e}")

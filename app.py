@@ -5,6 +5,7 @@ import numpy as np
 import joblib
 import matplotlib.pyplot as plt
 import os
+from pathlib import Path
 
 # --- Page Configuration ---
 st.set_page_config(page_title="Bioprocess CQA Predictor", page_icon="🔬", layout="wide")
@@ -20,9 +21,11 @@ def load_all_models():
         'xgb': 'xgb_model.pkl',
         'lasso': 'lasso_model.pkl'
     }
+    base_dir = Path(__file__).resolve().parent
+    models_dir = base_dir / 'models'
     for model_name, file_name in model_files.items():
-        path = os.path.join('models', file_name)
-        if os.path.exists(path):
+        path = models_dir / file_name
+        if path.exists():
             models[model_name] = joblib.load(path)
     return models
 
